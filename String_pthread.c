@@ -4,11 +4,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NUM_THREADS	4
-#define MAX 1024
+#define NUM_THREADS	4 //number of threads to use
+#define MAX 1024 //max string length
 
 void *sub_string(void *);
 int readf(FILE *fp);
+
 int total=0;
 int nlocal,n1,n2;
 char *s1,*s2;
@@ -72,20 +73,25 @@ int readf(FILE *fp)
 void *sub_string(void *threadid) 	/*each process searches in the string with the step of nprocs until it reach or beyond*/ 
 	/*the (n1-n2)th char which is the last possible beginning of the substring*/
 {
-	long tid = (long) threadid;
+	long tid = (long) threadid; //get thread's ID
 
+	//calculate the start and end index of this thread's partition of s1
 	int start = tid * nlocal;
 	int end = start + nlocal;
 
-	int local_count = 0;
+	int local_count = 0; //number of matches found by this thread
+
+	//search for s2 in this threads partition of s1
 	for (int i = start; i < end; ++i)
 	{
 		int count = 0;
+
+		//compare s2 against s1 starting position at i
 		for (int j = i, k = 0; k < n2; ++j, ++k)
 		{
 			if(*(s1+j) !=  *(s2+k)) 
 			{
-				break;
+				break; //stop comparing
 			}
 			else 
 			{
@@ -93,10 +99,12 @@ void *sub_string(void *threadid) 	/*each process searches in the string with the
 			}
 			if (count == n2) 
 			{
-				local_count++;
+				local_count++; //found a match
 			}
 		}
 	}
+
+	//add this threads local count to the global total
 	pthread_mutex_lock(&total_lock);
 	total += local_count;
 	pthread_mutex_unlock(&total_lock);

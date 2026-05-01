@@ -1,8 +1,3 @@
-/*
-  list-forming.c: 
-  Each thread generates a data node, attaches it to a global list. This is reapeated for K times.
-  There are num_threads threads. The value of "num_threads" is input by the student.
-*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -58,39 +53,56 @@ void * producer_thread( void *arg)
 {
     bind_thread_to_cpu(*((int*)arg));//bind this thread to a CPU
 
-    struct Node * ptr, tmp;
+    //private local list so no locking needed since eoly this thread uses it
+    struct list local;
+    local.header = local.tail = NULL;
     int counter = 0;  
 
-    /* generate and attach K nodes to the global list */
+    //build a local list of K nodes without any locking
     while( counter  < K )
     {
-        ptr = generate_data_node();
+        struct Node *ptr = generate_data_node();
 
         if( NULL != ptr )
         {
-            while(1)
+            ptr -> data = 1;
+
+            //attach node to local list
+            if (local.header == NULL)
             {
-		/* access the critical region and add a node to the global list */
-                if( !pthread_mutex_trylock(&mutex_lock) )
-                {
-                    ptr->data  = 1;//generate data
-		    /* attache the generated node to the global list */
-                    if( List->header == NULL )
-                    {
-                        List->header = List->tail = ptr;
-                    }
-                    else
-                    {
-                        List->tail->next = ptr;
-                        List->tail = ptr;
-                    }                    
-                    pthread_mutex_unlock(&mutex_lock);
-                    break;
-                }
-            }           
+                local.header = local.tail = ptr;
+            }
+            else
+            {
+                local.tail -> next = ptr;
+                local.tail = ptr;
+            }
         }
         ++counter;
     }
+
+    //attach entire local list to global list with ONE lock
+    if (local.header != NULL)
+    {
+        pthread_mutex_lock(&mutex_lock);
+
+        if (List -> header == NULL)
+        {
+            //global list is empty so local list becomes global list
+            List -> header = local.header;
+            List -> tail = local.tail;
+        }
+        else
+        {
+            //append local list after the current global tail
+            List -> tail -> next = local.header;
+            List -> tail = local.tail;
+        }
+
+        pthread_mutex_unlock(&mutex_lock);
+    }
+
+    return NULL;
 }
 
 int main(int argc, char* argv[])
